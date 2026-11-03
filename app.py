@@ -4,7 +4,7 @@ from flask import Flask, request
 
 app = Flask(__name__)
 
-TOKEN = os.environ.get("9061459483:AAHJLbslFzBvy9tr9aCqPKRqSNWGnLd0WYM")
+TOKEN = os.environ.get("BOT_TOKEN")
 API = f"https://api.telegram.org/bot{TOKEN}"
 
 CHANNELS = [
@@ -21,7 +21,7 @@ CHANNELS = [
 ]
 
 
-def telegram(method, payload=None):
+def tg(method, payload=None):
     response = requests.post(
         f"{API}/{method}",
         json=payload or {},
@@ -39,11 +39,11 @@ def send_message(chat_id, text, keyboard=None):
     if keyboard:
         data["reply_markup"] = keyboard
 
-    return telegram("sendMessage", data)
+    return tg("sendMessage", data)
 
 
 def answer_callback(callback_id):
-    return telegram(
+    return tg(
         "answerCallbackQuery",
         {"callback_query_id": callback_id}
     )
@@ -51,7 +51,7 @@ def answer_callback(callback_id):
 
 def get_chat_member(chat_id, user_id):
     try:
-        result = telegram(
+        data = tg(
             "getChatMember",
             {
                 "chat_id": chat_id,
@@ -59,8 +59,8 @@ def get_chat_member(chat_id, user_id):
             }
         )
 
-        if result.get("ok"):
-            return result.get("result")
+        if data.get("ok"):
+            return data.get("result")
 
     except Exception:
         pass
@@ -115,7 +115,7 @@ def send_welcome(chat_id):
     send_message(
         chat_id,
         "👋 أهلاً بيك في MoovieTalk\n\n"
-        "علشان تدخل المحتوى، اشترك في القناتين ثم اضغط:\n\n"
+        "علشان تدخل المحتوى، اشترك في القناتين ثم اضغط على:\n\n"
         "✅ تحقق من الاشتراك",
         keyboard
     )
@@ -149,24 +149,21 @@ def show_menu(chat_id):
 def handle_update(update):
 
     if "message" in update:
-
         message = update["message"]
-        text = message.get("text", "").strip()
-        chat_id = message["chat"]["id"]
 
-        if text == "/start":
-            send_welcome(chat_id)
+        if message.get("text", "").strip() == "/start":
+            send_welcome(message["chat"]["id"])
 
     if "callback_query" in update:
 
         callback = update["callback_query"]
-        callback_id = callback["id"]
-        data = callback.get("data")
+
         chat_id = callback["message"]["chat"]["id"]
+        data = callback.get("data")
 
         if data == "check":
 
-            answer_callback(callback_id)
+            answer_callback(callback["id"])
 
             if is_subscribed(chat_id):
                 show_menu(chat_id)
@@ -182,7 +179,7 @@ def handle_update(update):
 
         elif data == "movies":
 
-            answer_callback(callback_id)
+            answer_callback(callback["id"])
 
             send_message(
                 chat_id,
@@ -192,13 +189,32 @@ def handle_update(update):
 
         elif data == "series":
 
-            answer_callback(callback_id)
+            answer_callback(callback["id"])
 
             send_message(
                 chat_id,
                 "📺 قسم المسلسلات\n\n"
                 "القسم جاهز لإضافة محتوى المسلسلات."
             )
+
+
+def set_webhook():
+
+    webhook_url = os.environ.get("WEBHOOK_URL")
+
+    if not TOKEN or not webhook_url:
+        return
+
+    try:
+        tg(
+            "setWebhook",
+            {
+                "url": webhook_url
+            }
+        )
+
+    except Exception as e:
+        app.logger.exception(e)
 
 
 @app.get("/")
@@ -213,13 +229,15 @@ def webhook():
         update = request.get_json(silent=True) or {}
         handle_update(update)
 
-    except Exception as error:
-        app.logger.exception(error)
+    except Exception as e:
+        app.logger.exception(e)
 
     return "OK", 200
 
 
 if __name__ == "__main__":
+
+    set_webhook()
 
     port = int(os.environ.get("PORT", 10000))
 
