@@ -1,0 +1,10 @@
+[project]
+name = "moovietalk-bot"
+version = "1.0.0"
+dependencies = [
+    "flask",
+    "requests"
+]
+
+[tool.vercel]
+entrypoint = "app.py"
